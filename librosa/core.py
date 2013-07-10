@@ -2,7 +2,8 @@
 """Core IO, DSP and utility functions."""
 
 import os.path
-import audioread
+#import audioread
+import scipy.io.wavfile;
 
 import numpy as np
 import numpy.fft as fft
@@ -16,9 +17,7 @@ except ImportError:
     _HAS_SAMPLERATE = False
 
 
-
-#-- CORE ROUTINES --#
-def load(path, sr=22050, mono=True):
+def load_scipy(path, sr=22050, mono=True):
     """Load an audio file as a floating point time series.
 
     :parameters:
@@ -41,25 +40,71 @@ def load(path, sr=22050, mono=True):
 
     """
 
-    with audioread.audio_open(os.path.realpath(path)) as input_file:
-        sr_native = input_file.samplerate
+    (orig_sr,data) = scipy.io.wavfile.read(path);
+    float_data = data.astype(float);
+    if data.dtype == np.int16:
+        normalizer = float(2**15); # Maximal int16 value
+        pass;
+    else:
+        normalizer = 1.;
+        pass;
+    print "Reading wave file: normalizing native values by %f" % normalizer;
+    y = float_data / normalizer;
 
-        y = [np.frombuffer(frame, '<i2').astype(float) / float(1<<15) 
-                for frame in input_file]
-
-        y = np.concatenate(y)
-        if input_file.channels > 1:
-            if mono:
-                y = 0.5 * (y[::2] + y[1::2])
-            else:
-                y = y.reshape( (-1, 2)).T
+    if mono:
+        y = np.mean(y,axis=1);
+        pass;
 
     if sr is not None:
-        y = resample(y, sr_native, sr)
-    else:
-        sr = sr_native
-
+        y = resample(y, orig_sr, sr);
+        pass;
+    
     return (y, sr)
+
+
+#-- CORE ROUTINES --#
+##def load(path, sr=22050, mono=True):
+##    """Load an audio file as a floating point time series.
+##
+##    :parameters:
+##      - path : string
+##          path to the input file
+##
+##      - sr   : int > 0
+##          target sample rate.
+##          'None' uses the native sampling rate
+##
+##      - mono : boolean
+##          convert signal to mono
+##
+##    :returns:
+##      - y    : np.ndarray
+##          audio time series
+##
+##      - sr   : int  
+##          sampling rate of y
+##
+##    """
+##
+##    with audioread.audio_open(os.path.realpath(path)) as input_file:
+##        sr_native = input_file.samplerate
+##
+##        y = [np.frombuffer(frame, '<i2').astype(float) / float(1<<15) 
+##                for frame in input_file]
+##
+##        y = np.concatenate(y)
+##        if input_file.channels > 1:
+##            if mono:
+##                y = 0.5 * (y[::2] + y[1::2])
+##            else:
+##                y = y.reshape( (-1, 2)).T
+##
+##    if sr is not None:
+##        y = resample(y, sr_native, sr)
+##    else:
+##        sr = sr_native
+##
+##    return (y, sr)
 
 def resample(y, orig_sr, target_sr, res_type='sinc_fastest'):
     """Resample a signal from orig_sr to target_sr
